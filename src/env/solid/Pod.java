@@ -1,8 +1,15 @@
 package solid;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 import cartago.Artifact;
 import cartago.OPERATION;
 import cartago.OpFeedbackParam;
+import jason.functions.log;
 
 /**
  * A CArtAgO artifact that agent can use to interact with LDP containers in a Solid pod.
@@ -29,7 +36,35 @@ public class Pod extends Artifact {
    */
     @OPERATION
     public void createContainer(String containerName) {
-        log("1. Implement the method createContainer()");
+        log("method createContainer()");
+
+        String requestBody = "@prefix ldp: <http://www.w3.org/ns/ldp#>.\n"+
+            "@prefix dcterms: <http://purl.org/dc/terms/> .\n" +
+            "<> a ldp:Container, ldp:BasicContainer;\n" +
+            "dcterms:title \"personal-data\" ;\n" +
+            "dcterms:description \"Container for Exercise 4\"";
+
+        // TODO: check if "personal-data" container exists already
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/"))
+                    .header("Content-Type", "text/turtle")
+                    .header("Link", "<http://www.w3.org/ns/ldp/BasicContainer>; rel=\"type\"")
+                    .header("Slug", "personal-data")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if(response.statusCode() == 201) {
+                log("Container created sucessfully.");
+            } else {
+                log("A problem occured while creating the container, response status: " + response.toString());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
   /**

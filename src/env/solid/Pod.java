@@ -9,7 +9,6 @@ import java.net.http.HttpResponse;
 import cartago.Artifact;
 import cartago.OPERATION;
 import cartago.OpFeedbackParam;
-import jason.functions.log;
 
 /**
  * A CArtAgO artifact that agent can use to interact with LDP containers in a Solid pod.
@@ -36,33 +35,35 @@ public class Pod extends Artifact {
    */
     @OPERATION
     public void createContainer(String containerName) {
-        log("method createContainer()");
+        // log("method createContainer()");
+        if(ressourceExists(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/" + containerName + "/"))){
+            log("Container exists already");
+            return;
+        } 
 
         String requestBody = "@prefix ldp: <http://www.w3.org/ns/ldp#>.\n"+
-            "@prefix dcterms: <http://purl.org/dc/terms/> .\n" +
-            "<> a ldp:Container, ldp:BasicContainer;\n" +
-            "dcterms:title \"personal-data\" ;\n" +
-            "dcterms:description \"Container for Exercise 4\"";
+            "@prefix dcterms: <http://purl.org/dc/terms/>.\n" +
+            "<> a ldp:Container, ldp:BasicContainer, ldp:Resource;\n" +
+            "dcterms:title \"" + containerName + "\";\n" +
+            "dcterms:description \"Container for Exercise 4 created by a jacomo agent\".";
 
-        // TODO: check if "personal-data" container exists already
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/"))
+            .header("Content-Type", "text/turtle")
+            .header("Link", "<http://www.w3.org/ns/ldp#BasicContainer>; rel=\"type\"")
+            .header("Slug", containerName + "/")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
         try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/"))
-                    .header("Content-Type", "text/turtle")
-                    .header("Link", "<http://www.w3.org/ns/ldp/BasicContainer>; rel=\"type\"")
-                    .header("Slug", "personal-data")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if(response.statusCode() == 201) {
                 log("Container created sucessfully.");
             } else {
-                log("A problem occured while creating the container, response status: " + response.toString());
+                log("A problem occured while creating the container, response status: " + response.body());
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
+        } catch (IOException | InterruptedException  e) {
             e.printStackTrace();
         }
     }
@@ -76,7 +77,58 @@ public class Pod extends Artifact {
    */
     @OPERATION
     public void publishData(String containerName, String fileName, Object[] data) {
-        log("2. Implement the method publishData()");
+        // log("method publishData()");
+        // log(containerName);
+        // log(fileName);
+
+        URI fileUri = URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/" + containerName + "/" + fileName);
+
+        String requestBody = "";
+        for (Object obj : data) requestBody += obj.toString() + "\n";
+
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            if(ressourceExists(fileUri)) {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(fileUri)
+                    .header("Content-Type", "text/plain")
+                    .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+                    client.send(request, HttpResponse.BodyHandlers.ofString());
+            } else {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/" + containerName + "/"))
+                    .header("Content-Type", "text/plain")
+                    .header("Slug", fileName)
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+                    client.send(request, HttpResponse.BodyHandlers.ofString());
+            }
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Boolean ressourceExists(URI fileUri) {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest getRequest = HttpRequest.newBuilder()
+            .uri(fileUri)
+            .GET()
+            .build();
+
+        try {
+            HttpResponse<String> response = client.send(getRequest, HttpResponse.BodyHandlers.ofString());
+            if(response.statusCode() == 200){
+                // log("File Exists: " + fileUri.toString());
+                return true;
+            } 
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+        // log("File doesn't Exists: " + fileUri.toString());
+        return false;
     }
 
   /**
@@ -99,23 +151,22 @@ public class Pod extends Artifact {
    * @return An array whose elements are the data read from the .txt file
    */
     public Object[] readData(String containerName, String fileName) {
-        log("3. Implement the method readData(). Currently, the method returns mock data");
+        // log("3. Implement the method readData(). Currently, the method returns mock data");
 
-        // Remove the following mock responses once you have implemented the method
-        switch(fileName) {
-            case "watchlist.txt":
-                Object[] mockWatchlist = new Object[]{"The Matrix", "Inception", "Avengers: Endgame"};
-                return mockWatchlist;
-            case "sleep.txt":
-                Object[] mockSleepData = new Object[]{"6", "7", "5"};
-                return mockSleepData;
-            case "trail.txt":
-                Object[] mockTrailData = new Object[]{"3", "5.5", "5.5"};
-                return mockTrailData; 
-            default:
-                return new Object[0];
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest getRequest = HttpRequest.newBuilder()
+            .uri(URI.create("https://solid.interactions.ics.unisg.ch/valentinhsg/" + containerName + "/" + fileName))
+            .GET()
+            .build();
+
+        try {
+            HttpResponse<String> response = client.send(getRequest, HttpResponse.BodyHandlers.ofString());
+            // log(response.body());
+            return response.body().split("\n");
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
         }
-
+        return new Object [0];
     }
 
   /**
